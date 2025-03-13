@@ -64,6 +64,7 @@ func (s Server) Run() int {
 	mux.HandleFunc("GET /items/{id}", h.GetItem)
 	mux.HandleFunc("GET /items", h.GetItems)
 	mux.HandleFunc("GET /images/{filename}", h.GetImage)
+	mux.HandleFunc("GET /search", h.Search)
 
 	// start the server
 	slog.Info("http server started on", "port", s.Port)
@@ -356,4 +357,34 @@ func (s *Handlers) buildImagePath(imageFileName string) (string, error) {
 	}
 
 	return imgPath, nil
+}
+
+// Search is a handler to return items that match the keyword for GET /search
+func (s *Handlers) Search(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get keywords from query parameters
+	keyword := r.URL.Query().Get("keyword")
+	if keyword == "" {
+		http.Error(w, "keyword parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	// Search items by keywords
+	items, err := s.itemRepo.SearchByKeyword(ctx, keyword)
+	if err != nil {
+		slog.Error("failed to search items", "error", err, "keyword", keyword)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return search result
+	resp := GetItemsResponse{Items: items}
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("search completed", "keyword", keyword, "count", len(items))
 }
