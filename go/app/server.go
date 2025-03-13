@@ -2,6 +2,7 @@ package app
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ type Server struct {
 	Port string
 	// ImageDirPath is the path to the directory storing images.
 	ImageDirPath string
+	DB           *sql.DB
 }
 
 // Run is a method to start the server.
@@ -38,9 +40,21 @@ func (s Server) Run() int {
 	}
 
 	// STEP 5-1: set up the database connection
+	db, err := sql.Open("sqlite3", "./db/merucari.sqlite3")
+	if err != nil {
+		slog.Error("failed to open DB", "error", err)
+		return 1
+	}
+	defer db.Close()
+
+	// Read items.sql at runtime to create table
+	if err := setupDatabase(db, "./db/items.sql"); err != nil {
+		slog.Error("failed to set up database", "error", err)
+		return 1
+	}
 
 	// set up handlers
-	itemRepo := NewItemRepository()
+	itemRepo := NewItemRepository(db)
 	h := &Handlers{imgDirPath: s.ImageDirPath, itemRepo: itemRepo}
 
 	// set up routes
@@ -53,13 +67,25 @@ func (s Server) Run() int {
 
 	// start the server
 	slog.Info("http server started on", "port", s.Port)
-	err := http.ListenAndServe(":"+s.Port, simpleCORSMiddleware(simpleLoggerMiddleware(mux), frontURL, []string{"GET", "HEAD", "POST", "OPTIONS"}))
+	err = http.ListenAndServe(":"+s.Port, simpleCORSMiddleware(simpleLoggerMiddleware(mux), frontURL, []string{"GET", "HEAD", "POST", "OPTIONS"}))
 	if err != nil {
 		slog.Error("failed to start server: ", "error", err)
 		return 1
 	}
 
 	return 0
+}
+
+// setupDatabase reads items.sql and creates a table.
+func setupDatabase(db *sql.DB, sqlFile string) error {
+	bytes, err := os.ReadFile(sqlFile)
+	if err != nil {
+		return fmt.Errorf("failed to read sql file: %w", err)
+	}
+	if _, err := db.Exec(string(bytes)); err != nil {
+		return fmt.Errorf("failed to exec schema: %w", err)
+	}
+	return nil
 }
 
 type Handlers struct {
@@ -75,8 +101,7 @@ type HelloResponse struct {
 // Hello is a handler to return a Hello, world! message for GET / .
 func (s *Handlers) Hello(w http.ResponseWriter, r *http.Request) {
 	resp := HelloResponse{Message: "Hello, world!"}
-	err := json.NewEncoder(w).Encode(resp)
-	if err != nil {
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -168,14 +193,15 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := AddItemResponse{Message: message}
-	err = json.NewEncoder(w).Encode(resp)
-	if err != nil {
+	message = fmt.Sprintf("item stored: %s", item.Name)
+	slog.Info(message)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-// SetItem is a handler to return items for GET /items/{id}
+// GetItem is a handler to return items for GET /items/{id}
 func (s *Handlers) GetItem(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -206,10 +232,8 @@ func (s *Handlers) GetItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Return the item
-	err = json.NewEncoder(w).Encode(item)
-	if err != nil {
+	if err := json.NewEncoder(w).Encode(item); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	}
 }
 
