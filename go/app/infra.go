@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 	// STEP 5-1: uncomment this line
-	// _ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
