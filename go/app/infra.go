@@ -31,6 +31,7 @@ type ItemRepository interface {
 	Insert(ctx context.Context, item *Item) error
 	List(ctx context.Context) ([]*Item, error)
 	Select(ctx context.Context, id int) (*Item, error)
+	SearchByKeyword(ctx context.Context, keyword string) ([]*Item, error)
 }
 
 // itemRepository is an implementation of ItemRepository
@@ -105,4 +106,29 @@ func StoreImage(fileName string, image []byte) error {
 	}
 
 	return nil
+}
+
+// SearchByKeyword searches items that contain the specified keyword in their name
+func (i *itemRepository) SearchByKeyword(ctx context.Context, keyword string) ([]*Item, error) {
+	const query = `SELECT id, name, category, image_name FROM items WHERE name LIKE ?`
+	searchPattern := "%" + keyword + "%"
+
+	rows, err := i.db.QueryContext(ctx, query, searchPattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query items: %w", err)
+	}
+	defer rows.Close()
+
+	var items []*Item
+	for rows.Next() {
+		var it Item
+		if err := rows.Scan(&it.ID, &it.Name, &it.Category, &it.ImageName); err != nil {
+			return nil, fmt.Errorf("failed to scan item: %w", err)
+		}
+		items = append(items, &it)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row error: %w", err)
+	}
+	return items, nil
 }
