@@ -55,7 +55,12 @@ func (s Server) Run() int {
 
 	// set up handlers
 	itemRepo := NewItemRepository(db)
-	h := &Handlers{imgDirPath: s.ImageDirPath, itemRepo: itemRepo}
+	categoryRepo := NewCategoryRepository(db)
+	h := &Handlers{
+		imgDirPath:   s.ImageDirPath,
+		itemRepo:     itemRepo,
+		categoryRepo: categoryRepo,
+	}
 
 	// set up routes
 	mux := http.NewServeMux()
@@ -91,8 +96,9 @@ func setupDatabase(db *sql.DB, sqlFile string) error {
 
 type Handlers struct {
 	// imgDirPath is the path to the directory storing images.
-	imgDirPath string
-	itemRepo   ItemRepository
+	imgDirPath   string
+	itemRepo     ItemRepository
+	categoryRepo CategoryRepository
 }
 
 type HelloResponse struct {
@@ -177,10 +183,19 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get or create a category ID
+	categoryID, err := s.categoryRepo.GetOrCreate(ctx, req.Category)
+	if err != nil {
+		slog.Error("failed to get or create category: ", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	item := &Item{
-		Name:      req.Name,
-		Category:  req.Category, // STEP 4-2: add a category field
-		ImageName: fileName,     // STEP 4-4: add an image field
+		Name:       req.Name,
+		Category:   req.Category,
+		CategoryID: categoryID,
+		ImageName:  fileName, // STEP 4-4: add an image field
 	}
 	message := fmt.Sprintf("item received: %s", item.Name)
 	slog.Info(message)
