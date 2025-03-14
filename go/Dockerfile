@@ -1,20 +1,17 @@
-FROM alpine
+FROM golang:1.24.1-alpine
 
-# Install Go 1.24.1
-RUN apk add --no-cache wget tar
+RUN apk add --no-cache gcc musl-dev sqlite
 
-# Download and install Go 1.24.1 for Linux
-RUN wget https://go.dev/dl/go1.24.1.linux-arm64.tar.gz && \
-    tar -C /usr/local -xzf go1.24.1.linux-arm64.tar.gz && \
-    rm go1.24.1.linux-arm64.tar.gz
+WORKDIR /app
 
-# Add Go to PATH
-ENV PATH=$PATH:/usr/local/go/bin
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Create Users and Groups
+COPY . .
+
 RUN addgroup -S mercari && adduser -S trainee -G mercari
-# RUN chown -R trainee:mercari /path/to/db
+RUN chown -R trainee:mercari ./db
 
 USER trainee
 
-CMD ["go", "version"]
+CMD ["go", "run", "./cmd/api/main.go"]
