@@ -1,15 +1,16 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
+	"github.com/google/go-cmp/cmp"
+	"go.uber.org/mock/gomock"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
-	"bytes"
-	"github.com/google/go-cmp/cmp"
-	"go.uber.org/mock/gomock"
-	"mime/multipart"
 )
 
 func TestParseAddItemRequest(t *testing.T) {
@@ -71,7 +72,6 @@ func TestParseAddItemRequest(t *testing.T) {
 				}
 			}
 			w.Close()
-			
 
 			// prepare HTTP request
 			req, err := http.NewRequest("POST", "/items", &b)
@@ -102,14 +102,14 @@ func TestHelloHandler(t *testing.T) {
 
 	// Please comment out for STEP 6-2
 	// predefine what we want
-	// type wants struct {
-	// 	code int               // desired HTTP status code
-	// 	body map[string]string // desired body
-	// }
-	// want := wants{
-	// 	code: http.StatusOK,
-	// 	body: map[string]string{"message": "Hello, world!"},
-	// }
+	type wants struct {
+		code int               // desired HTTP status code
+		body map[string]string // desired body
+	}
+	want := wants{
+		code: http.StatusOK,
+		body: map[string]string{"message": "Hello, world!"},
+	}
 
 	// set up test
 	req := httptest.NewRequest("GET", "/hello", nil)
@@ -119,8 +119,19 @@ func TestHelloHandler(t *testing.T) {
 	h.Hello(res, req)
 
 	// STEP 6-2: confirm the status code
+	if res.Code != want.code {
+		t.Errorf("expected status code %d, got %d", want.code, res.Code)
+	}
+
+	var got map[string]string
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
 
 	// STEP 6-2: confirm response body
+	if diff := cmp.Diff(want.body, got); diff != "" {
+		t.Errorf("unexpected response body (-want +got):\n%s", diff)
+	}
 }
 
 func TestAddItem(t *testing.T) {
