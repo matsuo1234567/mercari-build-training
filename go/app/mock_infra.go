@@ -53,3 +53,102 @@ func (mr *MockItemRepositoryMockRecorder) Insert(ctx, item any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockItemRepository)(nil).Insert), ctx, item)
 }
+
+// List mocks base method.
+func (m *MockItemRepository) List(ctx context.Context) ([]*Item, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", ctx)
+	ret0, _ := ret[0].([]*Item)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MockItemRepositoryMockRecorder) List(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockItemRepository)(nil).List), ctx)
+}
+
+// SearchByKeyword mocks base method.
+func (m *MockItemRepository) SearchByKeyword(ctx context.Context, keyword string) ([]*Item, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchByKeyword", ctx, keyword)
+	ret0, _ := ret[0].([]*Item)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchByKeyword indicates an expected call of SearchByKeyword.
+func (mr *MockItemRepositoryMockRecorder) SearchByKeyword(ctx, keyword any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchByKeyword", reflect.TypeOf((*MockItemRepository)(nil).SearchByKeyword), ctx, keyword)
+}
+
+// Select mocks base method.
+func (m *MockItemRepository) Select(ctx context.Context, id int) (*Item, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Select", ctx, id)
+	ret0, _ := ret[0].(*Item)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Select indicates an expected call of Select.
+func (mr *MockItemRepositoryMockRecorder) Select(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockItemRepository)(nil).Select), ctx, id)
+}
+
+// MockCategoryRepository is a mock of CategoryRepository interface.
+type MockCategoryRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockCategoryRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockCategoryRepositoryMockRecorder is the mock recorder for MockCategoryRepository.
+type MockCategoryRepositoryMockRecorder struct {
+	mock *MockCategoryRepository
+}
+
+// NewMockCategoryRepository creates a new mock instance.
+func NewMockCategoryRepository(ctrl *gomock.Controller) *MockCategoryRepository {
+	mock := &MockCategoryRepository{ctrl: ctrl}
+	mock.recorder = &MockCategoryRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCategoryRepository) EXPECT() *MockCategoryRepositoryMockRecorder {
+	return m.recorder
+}
+
+// GetByID mocks base method.
+func (m *MockCategoryRepository) GetByID(ctx context.Context, id int) (*Category, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByID", ctx, id)
+	ret0, _ := ret[0].(*Category)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByID indicates an expected call of GetByID.
+func (mr *MockCategoryRepositoryMockRecorder) GetByID(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockCategoryRepository)(nil).GetByID), ctx, id)
+}
+
+// GetOrCreate mocks base method.
+func (m *MockCategoryRepository) GetOrCreate(ctx context.Context, name string) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOrCreate", ctx, name)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOrCreate indicates an expected call of GetOrCreate.
+func (mr *MockCategoryRepositoryMockRecorder) GetOrCreate(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrCreate", reflect.TypeOf((*MockCategoryRepository)(nil).GetOrCreate), ctx, name)
+}

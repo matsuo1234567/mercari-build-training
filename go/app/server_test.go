@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -24,7 +23,6 @@ func TestParseAddItemRequest(t *testing.T) {
 		err bool
 	}
 
-	// STEP 6-1: define test cases
 	cases := map[string]struct {
 		args map[string]string
 		wants
@@ -57,7 +55,6 @@ func TestParseAddItemRequest(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			// prepare request body
 			var b bytes.Buffer
 			w := multipart.NewWriter(&b)
 
@@ -76,17 +73,14 @@ func TestParseAddItemRequest(t *testing.T) {
 			}
 			w.Close()
 
-			// prepare HTTP request
 			req, err := http.NewRequest("POST", "/items", &b)
 			if err != nil {
 				t.Fatal(err)
 			}
 			req.Header.Set("Content-Type", w.FormDataContentType())
 
-			// execute test target
 			got, err := parseAddItemRequest(req)
 
-			// confirm the result
 			if err != nil {
 				if !tt.err {
 					t.Errorf("unexpected error: %v", err)
@@ -103,25 +97,20 @@ func TestParseAddItemRequest(t *testing.T) {
 func TestHelloHandler(t *testing.T) {
 	t.Parallel()
 
-	// Please comment out for STEP 6-2
-	// predefine what we want
-	type wants struct {
-		code int               // desired HTTP status code
-		body map[string]string // desired body
-	}
-	want := wants{
+	want := struct {
+		code int
+		body map[string]string
+	}{
 		code: http.StatusOK,
 		body: map[string]string{"message": "Hello, world!"},
 	}
 
-	// set up test
 	req := httptest.NewRequest("GET", "/hello", nil)
 	res := httptest.NewRecorder()
 
 	h := &Handlers{}
 	h.Hello(res, req)
 
-	// STEP 6-2: confirm the status code
 	if res.Code != want.code {
 		t.Errorf("expected status code %d, got %d", want.code, res.Code)
 	}
@@ -131,7 +120,6 @@ func TestHelloHandler(t *testing.T) {
 		t.Fatalf("failed to decode response body: %v", err)
 	}
 
-	// STEP 6-2: confirm response body
 	if diff := cmp.Diff(want.body, got); diff != "" {
 		t.Errorf("unexpected response body (-want +got):\n%s", diff)
 	}
@@ -147,7 +135,7 @@ func TestAddItem(t *testing.T) {
 	}
 	cases := map[string]struct {
 		args     map[string]string
-		injector func(m *MockItemRepository)
+		injector func(m *MockItemRepository, c *MockCategoryRepository)
 		wants
 	}{
 		"ok: correctly inserted": {
@@ -156,9 +144,8 @@ func TestAddItem(t *testing.T) {
 				"category": "phone",
 				"image":    "test.jpg",
 			},
-			injector: func(m *MockItemRepository) {
-				// STEP 6-3: define mock expectation
-				// succeeded to insert
+			injector: func(m *MockItemRepository, c *MockCategoryRepository) {
+				c.EXPECT().GetOrCreate(gomock.Any(), gomock.Any()).Return(1, nil)
 				m.EXPECT().Insert(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			wants: wants{
@@ -171,9 +158,8 @@ func TestAddItem(t *testing.T) {
 				"category": "phone",
 				"image":    "test.jpg",
 			},
-			injector: func(m *MockItemRepository) {
-				// STEP 6-3: define mock expectation
-				// failed to insert
+			injector: func(m *MockItemRepository, c *MockCategoryRepository) {
+				c.EXPECT().GetOrCreate(gomock.Any(), gomock.Any()).Return(1, nil)
 				m.EXPECT().Insert(gomock.Any(), gomock.Any()).Return(errors.New("failed to insert"))
 			},
 			wants: wants{
@@ -187,16 +173,19 @@ func TestAddItem(t *testing.T) {
 			t.Parallel()
 
 			ctrl := gomock.NewController(t)
-
 			mockIR := NewMockItemRepository(ctrl)
-			tt.injector(mockIR)
+			mockCR := NewMockCategoryRepository(ctrl)
+			tt.injector(mockIR, mockCR)
+
 			h := &Handlers{
-				imgDirPath: tmpDir,
-				itemRepo:   mockIR,
+				imgDirPath:   tmpDir,
+				itemRepo:     mockIR,
+				categoryRepo: mockCR,
 			}
 
 			var b bytes.Buffer
 			w := multipart.NewWriter(&b)
+
 			for k, v := range tt.args {
 				if k == "image" {
 					fw, err := w.CreateFormFile("image", v)
@@ -238,7 +227,6 @@ func TestAddItem(t *testing.T) {
 	}
 }
 
-// STEP 6-4: uncomment this test
 func TestAddItemE2e(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping e2e test")
@@ -265,6 +253,7 @@ func TestAddItemE2e(t *testing.T) {
 			args: map[string]string{
 				"name":     "used iPhone 16e",
 				"category": "phone",
+				"image":    "test.jpg",
 			},
 			wants: wants{
 				code: http.StatusOK,
@@ -274,6 +263,7 @@ func TestAddItemE2e(t *testing.T) {
 			args: map[string]string{
 				"name":     "",
 				"category": "phone",
+				"image":    "test.jpg",
 			},
 			wants: wants{
 				code: http.StatusBadRequest,
@@ -283,32 +273,52 @@ func TestAddItemE2e(t *testing.T) {
 
 	for name, tt := range cases {
 		t.Run(name, func(t *testing.T) {
-			h := &Handlers{itemRepo: &itemRepository{db: db}}
-
-			values := url.Values{}
-			for k, v := range tt.args {
-				values.Set(k, v)
+			h := &Handlers{
+				imgDirPath:   t.TempDir(),
+				itemRepo:     NewItemRepository(db),
+				categoryRepo: NewCategoryRepository(db),
 			}
-			req := httptest.NewRequest("POST", "/items", strings.NewReader(values.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+			var b bytes.Buffer
+			w := multipart.NewWriter(&b)
+
+			for k, v := range tt.args {
+				if k == "image" {
+					fw, err := w.CreateFormFile("image", v)
+					if err != nil {
+						t.Fatal(err)
+					}
+					fw.Write([]byte("test image data"))
+				} else {
+					if err := w.WriteField(k, v); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			w.Close()
+
+			req := httptest.NewRequest("POST", "/items", &b)
+			req.Header.Set("Content-Type", w.FormDataContentType())
 
 			rr := httptest.NewRecorder()
 			h.AddItem(rr, req)
 
-			// check response
 			if tt.wants.code != rr.Code {
 				t.Errorf("expected status code %d, got %d", tt.wants.code, rr.Code)
 			}
 			if tt.wants.code >= 400 {
 				return
 			}
-			for _, v := range tt.args {
-				if !strings.Contains(rr.Body.String(), v) {
-					t.Errorf("response body does not contain %s, got: %s", v, rr.Body.String())
-				}
+
+			var resp AddItemResponse
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode response body: %v", err)
 			}
 
-			// STEP 6-4: check inserted data
+			expectedMessage := fmt.Sprintf("item received: %s", tt.args["name"])
+			if resp.Message != expectedMessage {
+				t.Errorf("unexpected message, want %q, got %q", expectedMessage, resp.Message)
+			}
 		})
 	}
 }
@@ -324,7 +334,6 @@ func setupDB(t *testing.T) (db *sql.DB, closers []func(), e error) {
 		}
 	}()
 
-	// create a temporary file for e2e testing
 	f, err := os.CreateTemp(".", "*.sqlite3")
 	if err != nil {
 		return nil, nil, err
@@ -334,7 +343,6 @@ func setupDB(t *testing.T) (db *sql.DB, closers []func(), e error) {
 		os.Remove(f.Name())
 	})
 
-	// set up tables
 	db, err = sql.Open("sqlite3", f.Name())
 	if err != nil {
 		return nil, nil, err
@@ -343,14 +351,21 @@ func setupDB(t *testing.T) (db *sql.DB, closers []func(), e error) {
 		db.Close()
 	})
 
-	// TODO: replace it with real SQL statements.
-	cmd := `CREATE TABLE IF NOT EXISTS items (
- 		id INTEGER PRIMARY KEY AUTOINCREMENT,
- 		name VARCHAR(255),
- 		category VARCHAR(255)
- 	)`
-	_, err = db.Exec(cmd)
-	if err != nil {
+	// Create tables
+	schema := `
+	CREATE TABLE IF NOT EXISTS categories (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name VARCHAR(255) NOT NULL UNIQUE
+	);
+	CREATE TABLE IF NOT EXISTS items (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name VARCHAR(255),
+		category_id INTEGER,
+		image_name VARCHAR(255),
+		FOREIGN KEY (category_id) REFERENCES categories(id)
+	);
+	`
+	if _, err := db.Exec(schema); err != nil {
 		return nil, nil, err
 	}
 
