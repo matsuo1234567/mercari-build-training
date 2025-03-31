@@ -6,9 +6,10 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-
+	"bytes"
 	"github.com/google/go-cmp/cmp"
 	"go.uber.org/mock/gomock"
+	"mime/multipart"
 )
 
 func TestParseAddItemRequest(t *testing.T) {
@@ -26,13 +27,15 @@ func TestParseAddItemRequest(t *testing.T) {
 	}{
 		"ok: valid request": {
 			args: map[string]string{
-				"name":     "", // fill here
-				"category": "", // fill here
+				"name":     "jacket",
+				"category": "fashion",
+				"image":    "images/local_image.jpg",
 			},
 			wants: wants{
 				req: &AddItemRequest{
-					Name: "", // fill here
-					// Category: "", // fill here
+					Name:     "jacket",
+					Category: "fashion",
+					Image:    []byte("images/local_image.jpg"),
 				},
 				err: false,
 			},
@@ -51,17 +54,31 @@ func TestParseAddItemRequest(t *testing.T) {
 			t.Parallel()
 
 			// prepare request body
-			values := url.Values{}
+			var b bytes.Buffer
+			w := multipart.NewWriter(&b)
+
 			for k, v := range tt.args {
-				values.Set(k, v)
+				if k == "image" {
+					fw, err := w.CreateFormFile("image", v)
+					if err != nil {
+						t.Fatal(err)
+					}
+					fw.Write([]byte(v))
+				} else {
+					if err := w.WriteField(k, v); err != nil {
+						t.Fatal(err)
+					}
+				}
 			}
+			w.Close()
+			
 
 			// prepare HTTP request
-			req, err := http.NewRequest("POST", "http://localhost:9001/items", strings.NewReader(values.Encode()))
+			req, err := http.NewRequest("POST", "/items", &b)
 			if err != nil {
-				t.Fatalf("failed to create request: %v", err)
+				t.Fatal(err)
 			}
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("Content-Type", w.FormDataContentType())
 
 			// execute test target
 			got, err := parseAddItemRequest(req)
